@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CRT Snake</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e0a;
+    --panel: #0f1a12;
+    --grid: #16261a;
+    --snake: #39ff6a;
+    --snake-dark: #1f8f3d;
+    --food: #ff3d7f;
+    --text: #b7f5c4;
+    --muted: #4d7a5a;
+    --crt-line: rgba(57, 255, 106, 0.04);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .cabinet {
+    width: 100%;
+    max-width: 480px;
+    background: var(--panel);
+    border-radius: 18px;
+    padding: 24px;
+    box-shadow:
+      0 0 0 1px #1f3324,
+      0 20px 60px rgba(0,0,0,0.6),
+      inset 0 0 40px rgba(57,255,106,0.03);
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 16px;
+    font-family: 'Press Start 2P', monospace;
+  }
+
+  .title {
+    font-size: 14px;
+    letter-spacing: 1px;
+    color: var(--snake);
+    text-shadow: 0 0 8px rgba(57,255,106,0.5);
+  }
+
+  .score {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .score span {
+    color: var(--text);
+  }
+
+  .screen {
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 2px solid #1f3324;
+    background: #060a07;
+  }
+
+  .screen::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      var(--crt-line) 0px,
+      var(--crt-line) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    pointer-events: none;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    image-rendering: pixelated;
+  }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: rgba(6,10,7,0.85);
+    text-align: center;
+    padding: 20px;
+  }
+
+  .overlay.show { display: flex; }
+
+  .overlay h2 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 16px;
+    color: var(--food);
+    margin: 0;
+    text-shadow: 0 0 10px rgba(255,61,127,0.6);
+  }
+
+  .overlay p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  button {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    background: var(--snake);
+    color: #06170c;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+  }
+
+  button:hover { background: #5cff8a; }
+
+  .controls {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    max-width: 200px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .controls button.pad {
+    background: var(--grid);
+    color: var(--snake);
+    font-size: 16px;
+    padding: 12px 0;
+    border: 1px solid #1f3324;
+  }
+
+  .controls button.pad:hover { background: #1f3324; }
+
+  .pad-up { grid-column: 2; }
+  .pad-left { grid-column: 1; grid-row: 2; }
+  .pad-down { grid-column: 2; grid-row: 2; }
+  .pad-right { grid-column: 3; grid-row: 2; }
+
+  .hint {
+    text-align: center;
+    margin-top: 14px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  @media (min-width: 520px) {
+    .controls { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="cabinet">
+  <div class="header">
+    <div class="title">CRT_SNAKE</div>
+    <div class="score">SCORE <span id="score">0</span> &nbsp; BEST <span id="best">0</span></div>
+  </div>
+
+  <div class="screen">
+    <canvas id="game" width="360" height="360"></canvas>
+    <div class="overlay" id="overlay">
+      <h2 id="overlayTitle">GAME OVER</h2>
+      <p id="overlayText">You scored 0</p>
+      <button id="startBtn">PLAY</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="pad pad-up" data-dir="up">&#8593;</button>
+    <button class="pad pad-left" data-dir="left">&#8592;</button>
+    <button class="pad pad-down" data-dir="down">&#8595;</button>
+    <button class="pad pad-right" data-dir="right">&#8594;</button>
+  </div>
+
+  <div class="hint">arrow keys or WASD to move &middot; tap pad on mobile</div>
+</div>
+
+<script>
+(function () {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const cell = 18;
+  const cols = canvas.width / cell;
+  const rows = canvas.height / cell;
+
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const overlay = document.getElementById('overlay');
+  const overlayTitle = document.getElementById('overlayTitle');
+  const overlayText = document.getElementById('overlayText');
+  const startBtn = document.getElementById('startBtn');
+
+  let snake, dir, nextDir, food, score, best, loopId, speed, running;
+
+  best = Number(localStorage.getItem ? 0 : 0); // storage not used per artifact rules; kept in memory only
+  best = 0;
+
+  function reset() {
+    snake = [{x: 8, y: 9}, {x: 7, y: 9}, {x: 6, y: 9}];
+    dir = 'right';
+    nextDir = 'right';
+    score = 0;
+    speed = 130;
+    running = true;
+    placeFood();
+    scoreEl.textContent = score;
+    overlay.classList.remove('show');
+    if (loopId) clearTimeout(loopId);
+    tick();
+  }
+
+  function placeFood() {
+    let valid = false;
+    while (!valid) {
+      food = {
+        x: Math.floor(Math.random() * cols),
+        y: Math.floor(Math.random() * rows)
+      };
+      valid = !snake.some(s => s.x === food.x && s.y === food.y);
+    }
+  }
+
+  function tick() {
+    if (!running) return;
+    dir = nextDir;
+    const head = {...snake[0]};
+
+    if (dir === 'up') head.y -= 1;
+    if (dir === 'down') head.y += 1;
+    if (dir === 'left') head.x -= 1;
+    if (dir === 'right') head.x += 1;
+
+    const hitWall = head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows;
+    const hitSelf = snake.some(s => s.x === head.x && s.y === head.y);
+
+    if (hitWall || hitSelf) {
+      gameOver();
+      return;
+    }
+
+    snake.unshift(head);
+
+    if (head.x === food.x && head.y === food.y) {
+      score += 10;
+      scoreEl.textContent = score;
+      if (score > best) { best = score; bestEl.textContent = best; }
+      placeFood();
+      speed = Math.max(70, speed - 3);
+    } else {
+      snake.pop();
+    }
+
+    draw();
+    loopId = setTimeout(tick, speed);
+  }
+
+  function draw() {
+    ctx.fillStyle = '#060a07';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = 'rgba(57,255,106,0.05)';
+    for (let i = 1; i < cols; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * cell, 0);
+      ctx.lineTo(i * cell, canvas.height);
+      ctx.stroke();
+    }
+    for (let j = 1; j < rows; j++) {
+      ctx.beginPath();
+      ctx.moveTo(0, j * cell);
+      ctx.lineTo(canvas.width, j * cell);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#ff3d7f';
+    ctx.shadowColor = '#ff3d7f';
+    ctx.shadowBlur = 10;
+    ctx.fillRect(food.x * cell + 2, food.y * cell + 2, cell - 4, cell - 4);
+    ctx.shadowBlur = 0;
+
+    snake.forEach((s, i) => {
+      ctx.fillStyle = i === 0 ? '#39ff6a' : '#1f8f3d';
+      if (i === 0) {
+        ctx.shadowColor = '#39ff6a';
+        ctx.shadowBlur = 8;
+      }
+      ctx.fillRect(s.x * cell + 1, s.y * cell + 1, cell - 2, cell - 2);
+      ctx.shadowBlur = 0;
+    });
+  }
+
+  function gameOver() {
+    running = false;
+    overlayTitle.textContent = 'GAME OVER';
+    overlayText.textContent = 'You scored ' + score;
+    startBtn.textContent = 'RETRY';
+    overlay.classList.add('show');
+  }
+
+  function setDir(newDir) {
+    const opposite = { up: 'down', down: 'up', left: 'right', right: 'left' };
+    if (opposite[newDir] === dir) return;
+    nextDir = newDir;
+  }
+
+  document.addEventListener('keydown', e => {
+    const map = {
+      ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+      w: 'up', s: 'down', a: 'left', d: 'right'
+    };
+    if (map[e.key]) {
+      e.preventDefault();
+      if (!running) return;
+      setDir(map[e.key]);
+    }
+  });
+
+  document.querySelectorAll('.pad').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!running) return;
+      setDir(btn.dataset.dir);
+    });
+  });
+
+  startBtn.addEventListener('click', reset);
+
+  overlayTitle.textContent = 'CRT SNAKE';
+  overlayText.textContent = 'Eat the pink blocks. Don\'t hit yourself.';
+  overlay.classList.add('show');
+  draw();
+  snake = [{x: 8, y: 9}, {x: 7, y: 9}, {x: 6, y: 9}];
+  food = {x: 14, y: 9};
+  draw();
+})();
+</script>
+
+</body>
+</html>
